@@ -44,7 +44,7 @@ def crawl(directory):
             links = re.findall(r"<a\s+(?:[^>]*?)href=\"([^\"]*)\"", contents)
             # pages[filename] = set(links)
             # Error with the given code: 
-            # pages[filename] = set(links) - {filename}
+            pages[filename] = set(links) - {filename}
 
     # Only include links to other pages in the corpus
     for filename in pages:
@@ -135,23 +135,20 @@ def iterate_pagerank(corpus, damping_factor):
     flag = True
 
     while flag:
-        p2 = {}
+        p2 = dict.fromkeys( list( corpus.keys() ) , 0)
         flag = False
 
+        for page in corpus:
+            for link in corpus[page]:
+                    p2[ link ] += pr[page] / len( corpus[page] )
+
         for page in pr.keys():
-            p2[page] = (1.0-damping_factor) / N + damping_factor * get_sum(corpus, pr, page)
+            p2[page] = (1.0-damping_factor) / N + damping_factor * p2[page]
             if abs( pr[page] - p2[page] ) > 0.001:   flag = True
         pr = p2
 
     return pr
 
-
-def get_sum(corpus, distribution, page):
-    result = 0
-    for p in corpus:
-        if page in corpus[p]:
-            result += distribution[p] / len(corpus[p])
-    return result
 
 if __name__ == "__main__":
     main()
