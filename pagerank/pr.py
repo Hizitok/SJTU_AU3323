@@ -1,22 +1,17 @@
+import copy
 import os
 import random
 import re
 import sys
 
-import pandas as pd
-import numpy as np
-import random
-import time
-
-
 DAMPING = 0.85
 SAMPLES = 10000
+
 
 def main():
     if len(sys.argv) != 2:
         sys.exit("Usage: python pagerank.py corpus")
     corpus = crawl(sys.argv[1])
-    print(corpus)
     ranks = sample_pagerank(corpus, DAMPING, SAMPLES)
     print(f"PageRank Results from Sampling (n = {SAMPLES})")
     for page in sorted(ranks):
@@ -25,7 +20,6 @@ def main():
     print(f"PageRank Results from Iteration")
     for page in sorted(ranks):
         print(f"  {page}: {ranks[page]:.4f}")
-
 
 def crawl(directory):
     """
@@ -42,9 +36,7 @@ def crawl(directory):
         with open(os.path.join(directory, filename)) as f:
             contents = f.read()
             links = re.findall(r"<a\s+(?:[^>]*?)href=\"([^\"]*)\"", contents)
-            # pages[filename] = set(links)
-            # Error with the given code: 
-            # pages[filename] = set(links) - {filename}
+            pages[filename] = set(links) - {filename}
 
     # Only include links to other pages in the corpus
     for filename in pages:
@@ -65,29 +57,20 @@ def transition_model(corpus, page, damping_factor):
     linked to by `page`. With probability `1 - damping_factor`, choose
     a link at random chosen from all pages in the corpus.
     """
-    prop_dist = {}
+    pd = {}
+    page_links = corpus[page]
+    total_pages = len(corpus)
+    total_linked_pages = len(page_links)
+    if page_links:
+        for key in corpus:
+            pd[key] = (1 - damping_factor) / total_pages
 
-    # check if page has outgoing links
-    dict_len = len(corpus.keys())
-    pages_len = len(corpus[page])
-
-    if len(corpus[page]) < 1:
-        # no outgoing pages, choosing randomly from all possible pages
-        for key in corpus.keys():
-            prop_dist[key] = 1 / dict_len
-
+        for key in page_links:
+            pd[key] += damping_factor / total_linked_pages
     else:
-        # there are outgoing pages, calculating distribution
-        random_factor = (1 - damping_factor) / dict_len
-        even_factor = damping_factor / pages_len
-
-        for key in corpus.keys():
-            if key not in corpus[page]:
-                prop_dist[key] = random_factor
-            else:
-                prop_dist[key] = even_factor + random_factor
-
-    return prop_dist
+        for key in corpus:
+            pd[key] = 1.0 / total_pages
+    return pd
 
 
 def sample_pagerank(corpus, damping_factor, n):
@@ -99,26 +82,17 @@ def sample_pagerank(corpus, damping_factor, n):
     their estimated PageRank value (a value between 0 and 1). All
     PageRank values should sum to 1.
     """
-    # Powered by Hu Zhengtao
-    
-    pr = dict.fromkeys( list( corpus.keys() ) ,0)
+    distribution = {}.fromkeys(corpus.keys(), 0)
+    page = random.choices(list(corpus.keys()))[0]
 
-    random.seed( time.time())
+    for i in range(1, n):
+        curr_distribution = transition_model(corpus, page, damping_factor)
+        for _page in distribution:
+            distribution[_page] = (((i-1) * distribution[_page]) + curr_distribution[_page]) / i
+        page = random.choices(list(distribution.keys()), weights=list(distribution.values()), k=1)[0]
 
-    N = len( corpus.keys() )
-    pl = random.choice( list(corpus.keys()) ) 
-    for i in range(n):
-        if random.random() <= damping_factor and len(corpus[pl]) >1 :
+    return distribution
 
-            pl = random.choice(list(corpus[pl]))
-            pr[pl] += 1
-        else:       
-            pl = random.choice(list(corpus.keys()))
-            pr[pl] += 1
-
-    for i in pr:
-        pr[i] = pr[i] / n
-    return pr
 
 def iterate_pagerank(corpus, damping_factor):
     """
@@ -129,21 +103,18 @@ def iterate_pagerank(corpus, damping_factor):
     their estimated PageRank value (a value between 0 and 1). All
     PageRank values should sum to 1.
     """
+    total_pages = len(corpus)
+    distribution = {}.fromkeys(corpus.keys(), 1.0 / total_pages)
+    change = True
 
-    N = len( corpus )
-    pr = dict.fromkeys( list( corpus.keys() ) ,1.0/N)
-    flag = True
+    while change:
+        change = False
+        old_distribution = copy.deepcopy(distribution)
+        for page in corpus:
+            distribution[page] = ((1 - damping_factor)/total_pages) + (damping_factor * get_sum(corpus, distribution, page))
+            change = change or abs(old_distribution[page] - distribution[page]) > 0.001
 
-    while flag:
-        p2 = {}
-        flag = False
-
-        for page in pr.keys():
-            p2[page] = (1.0-damping_factor) / N + damping_factor * get_sum(corpus, pr, page)
-            if abs( pr[page] - p2[page] ) > 0.001:   flag = True
-        pr = p2
-
-    return pr
+    return distribution
 
 
 def get_sum(corpus, distribution, page):
@@ -152,6 +123,7 @@ def get_sum(corpus, distribution, page):
         if page in corpus[p]:
             result += distribution[p] / len(corpus[p])
     return result
+
 
 if __name__ == "__main__":
     main()
