@@ -6,6 +6,9 @@ from time import perf_counter
 import random
 from colorama import init, Fore, Style
 
+import json
+import os
+
 
 STARTING_STACK = 10000
 
@@ -163,7 +166,7 @@ def needsChanceNode(h):
 
 def getCurrentPlayerFromInfoSet(infoSet):
     currentPlayer = filter(
-        lambda a : len(ALL_ACTIONS.contains(a)) % len(PLAYER)
+        lambda a : len(ALL_ACTIONS.contains(a)) % len(PLAYERS)
     )
     return currentPlayer
 
@@ -240,7 +243,7 @@ def getRanks(card):
       if (card == "Q"): return 12
       if (card == "J"): return 11      
       if (card == "T"): return 10
-      return int(card);
+      return int(card)
 
 def getBoardStrength(cards):
     cardsWithoutSuit = list(map(lambda card : card[0], cards))
@@ -329,7 +332,7 @@ def getBoardStrength(cards):
     #straightiness 0,1,2,3,4 for nothing possible, openended or gutter unlikely, open ended or (double)gutter possible, gutter on board, open ended on board, straight on board.
     
     boardStrength = pairs + flushiness + straightness
-    print("cards", Fore.GREEN, cards, Style.RESET_ALL, "becomes ", boardStrength)
+    # print("cards", Fore.GREEN, cards, Style.RESET_ALL, "becomes ", boardStrength)
     return boardStrength
     #should return string indicating [pairs][flushyness][straightyness] like 000 for A5To for a total of 216 combinations
 
@@ -358,7 +361,7 @@ def getInformationSet(h,p):
     # print("infoset", infoSet)
     try :
         I = treeMap[infoSet]
-        print("we found an I that already has been declared!", I)
+        # print("we found an I that already has been declared!", I)
     except Exception as e :
         #if undefined, create new and return that one
         treeMap[infoSet] = {
@@ -370,7 +373,7 @@ def getInformationSet(h,p):
 
         I = treeMap[infoSet]
     
-    print("infoSet", infoSet, "Found")
+    # print("infoSet", infoSet, "Found")
     return I
 
 """
@@ -658,18 +661,18 @@ def traverseMCCFR(h,p):
         h2 = calculateWinner(h)
         utility = getUtility(h2,p)
     # if (utility > 0):
-        print("Terminal with utility", utility, "H", h)
+        # print("Terminal with utility", utility, "H", h)
         return utility
     elif not inHand(h,p):
         print("!inHand")
         h0 = doAction(h, "none", p)
         return traverseMCCFR(h0,p) #the remaining actions are irrelevant to Player i
     elif needsChanceNode(h):
-        print("Needs chance node");
+        # print("Needs chance node");
         ha = nextRound(h)
         return traverseMCCFR(ha,p)
     elif h.currentPlayer == p:
-        print("You", p)
+        # print("You", p)
         #if history ends with current player to act
         I = getInformationSet(h,p) # the Player i infoset of this node . GET node?
         strategyI = calculateStrategy(I['regretSum'],h) #determine the strategy at this infoset
@@ -694,12 +697,12 @@ def traverseMCCFR(h,p):
             node = {**I, 'regretSum': newRegret}
             treeMap[I['infoSet']] = node
         
-        print("we get here")
+        # print("we get here")
 
         return v
     else:
         Ph = h.currentPlayer
-        print("Player", Ph, "'s turn")
+        # print("Player", Ph, "'s turn")
         I = getInformationSet(h,Ph)
         strategyI = calculateStrategy(I['regretSum'], h)
         actions = getActions(h)
@@ -713,7 +716,7 @@ def traverseMCCFR(h,p):
 # @param {*} p Player i
 #
 def updateStrategy(h,p,depth):
-    if isTerminal(h) | inHand(h,p)==false | h.bettingRound > 0:
+    if isTerminal(h) | inHand(h,p)==False | h.bettingRound > 0:
         print("isTerminal(h) | !inHand(h, p) | h.bettingRound > 0")
         #average strategy only tracked on the first betting round
         return
@@ -779,7 +782,7 @@ def calculateStrategy(R,h):
     
     return strategyI
 
-def processKey(key):
+def processKey(key, p):
     I = treeMap[key]
     if (getCurrentPlayerFromInfoSet(I['infoSet']) == p):
         actions = getActionsFromInfoSet(I)
@@ -793,7 +796,7 @@ def processKey(key):
         
         treeMap[I['infoSet']] = {**I, 'regretSum': regretSum, 'strategy': strategy}
 
-def processExtra(key):
+def processExtra(key, p, d):
     I = treeMap[key]
     if (getCurrentPlayerFromInfoSet(I['infoSet']) == p):
         regretSum = list(map(lambda Ra : Ra * d, I['regretSum']))
@@ -802,9 +805,12 @@ def processExtra(key):
 
 def MCCFR_P(minutes=1, h=""):
     for p in range(len(PLAYERS)):
-        map(lambda key : processKey(key), treeMap.keys())
+        map(lambda key : processKey(key,p), treeMap.keys())
 
+    # Get Start Time
     start = perf_counter()
+
+    # iter == times of loop
     iterations = 0
     t = 0
     while (t / 60  < minutes):
@@ -834,15 +840,25 @@ def MCCFR_P(minutes=1, h=""):
             d = (m / DISCOUNT_INTERVAL) / (m / DISCOUNT_INTERVAL + 1)
 
             for p in range(len(PLAYERS)):
-                map(lambda key : processExtra(key), treeMap.keys())
+                map(lambda key : processExtra(key, p, d), treeMap.keys())
 
         t = perf_counter() - start
     
-    print("done")
+    # print("done")
     return 0 # return 𝜙. must be strategy
     
-MCCFR_P(0.01)
 
-# map(lambda I : print(treeMap[I]), treeMap.keys())
+if __name__ == "__main__":
 
-print("we have ", len(treeMap.keys()), "entries in the Object")
+    if os.path.exists("data.json"):
+        with open('data.json','r+') as f:
+            treeMap = json.load(f)
+
+    MCCFR_P(0.01)
+
+    map(lambda I : print(treeMap[I]), treeMap.keys())
+    print("we have ", len(treeMap.keys()), "entries in the Object")
+
+    with open('data.json','w+') as f:
+        json.dump(treeMap, f)
+
