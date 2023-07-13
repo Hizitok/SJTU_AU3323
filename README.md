@@ -1,4 +1,4 @@
-# AU3323
+# SJTU AU3323
 
 ### Powered by Hizitok
 Course AU3323 of Shanghai Jiao Tong University \
